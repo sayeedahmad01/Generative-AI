@@ -16,7 +16,7 @@ def load_model():
 
     model = pipeline(
         "text-generation",
-        model="distilgpt2"
+        model="sshleifer/tiny-gpt2"
     )
 
     return model
