@@ -60,10 +60,9 @@ st.sidebar.info("GPT-Neo Language Model")
 @st.cache_resource
 def load_model():
     generator = pipeline(
-        "text-generation",
-        model="EleutherAI/gpt-neo-125M"
-    )
-    return generator
+    "text-generation",
+    model="distilgpt2"
+)
 
 generator = load_model()
 
