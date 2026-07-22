@@ -1,214 +1,128 @@
-import argparse
-import torch
-from torch.utils.data import DataLoader, Dataset
-from transformers import GPT2Tokenizer, GPT2LMHeadModel
+import streamlit as st
+from transformers import pipeline
 
+# -------------------------
+# Page Configuration
+# -------------------------
+st.set_page_config(
+    page_title="GPT-Neo Chat Assistant",
+    page_icon="🤖",
+    layout="wide"
+)
 
+# -------------------------
+# Custom CSS
+# -------------------------
+st.markdown("""
+<style>
+.main {
+    background-color: #0E1117;
+}
 
-# Dataset
+.stChatMessage {
+    border-radius: 10px;
+    padding: 10px;
+}
 
-class TextDataset(Dataset):
+h1 {
+    text-align: center;
+}
+</style>
+""", unsafe_allow_html=True)
 
-    def __init__(self, texts, tokenizer, max_length=128):
-        self.examples = []
+# -------------------------
+# Sidebar
+# -------------------------
+st.sidebar.title("⚙️ Settings")
 
-        for text in texts:
-            tokens = tokenizer(
-                text,
-                truncation=True,
-                padding="max_length",
+temperature = st.sidebar.slider(
+    "Temperature",
+    min_value=0.1,
+    max_value=1.5,
+    value=0.8,
+    step=0.1
+)
+
+max_length = st.sidebar.slider(
+    "Max Tokens",
+    min_value=50,
+    max_value=500,
+    value=150,
+    step=10
+)
+
+st.sidebar.markdown("---")
+st.sidebar.info("GPT-Neo Language Model")
+
+# -------------------------
+# Load Model
+# -------------------------
+@st.cache_resource
+def load_model():
+    generator = pipeline(
+        "text-generation",
+        model="EleutherAI/gpt-neo-125M"
+    )
+    return generator
+
+generator = load_model()
+
+# -------------------------
+# Title
+# -------------------------
+st.title("🤖 GPT-Neo Chat Assistant")
+st.caption("AI-Powered Text Generation Dashboard")
+
+# -------------------------
+# Session State
+# -------------------------
+if "messages" not in st.session_state:
+    st.session_state.messages = []
+
+# -------------------------
+# Show Chat History
+# -------------------------
+for msg in st.session_state.messages:
+    with st.chat_message(msg["role"]):
+        st.markdown(msg["content"])
+
+# -------------------------
+# User Input
+# -------------------------
+prompt = st.chat_input("Ask me anything...")
+
+if prompt:
+
+    st.session_state.messages.append(
+        {"role": "user", "content": prompt}
+    )
+
+    with st.chat_message("user"):
+        st.markdown(prompt)
+
+    with st.chat_message("assistant"):
+
+        with st.spinner("Thinking..."):
+
+            response = generator(
+                prompt,
                 max_length=max_length,
-                return_tensors="pt"
+                temperature=temperature,
+                do_sample=True
             )
 
-            self.examples.append(
-                tokens["input_ids"].squeeze()
+            answer = response[0]["generated_text"]
+
+            st.markdown(answer)
+
+            st.session_state.messages.append(
+                {"role": "assistant", "content": answer}
             )
 
-    def __len__(self):
-        return len(self.examples)
-
-    def __getitem__(self, idx):
-        return self.examples[idx]
-
-
-
-# Training Function
-
-def train_model(model, dataloader, device, epochs):
-
-    optimizer = torch.optim.AdamW(
-        model.parameters(),
-        lr=5e-5
-    )
-
-    model.train()
-
-    for epoch in range(epochs):
-
-        total_loss = 0
-
-        for batch in dataloader:
-
-            batch = batch.to(device)
-
-            outputs = model(
-                input_ids=batch,
-                labels=batch
-            )
-
-            loss = outputs.loss
-
-            optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
-
-            total_loss += loss.item()
-
-        print(
-            f"Epoch {epoch + 1} | Loss: {total_loss:.4f}"
-        )
-
-
-
-# Text Generation
-
-def generate_text(model, tokenizer, prompt, device):
-
-    model.eval()
-
-    inputs = tokenizer(
-        prompt,
-        return_tensors="pt"
-    ).to(device)
-
-    output = model.generate(
-        **inputs,
-        max_new_tokens=100,
-        do_sample=True,
-        temperature=0.8,
-        top_p=0.95,
-        pad_token_id=tokenizer.eos_token_id
-    )
-
-    text = tokenizer.decode(
-        output[0],
-        skip_special_tokens=True
-    )
-
-    print("\nGenerated Text:\n")
-    print(text)
-
-# Main Function
-
-def main():
-
-    parser = argparse.ArgumentParser()
-
-    parser.add_argument(
-        "--train",
-        action="store_true"
-    )
-
-    parser.add_argument(
-        "--predict",
-        action="store_true"
-    )
-
-    parser.add_argument(
-        "--prompt",
-        type=str,
-        default="Artificial Intelligence is"
-    )
-
-    parser.add_argument(
-        "--epochs",
-        type=int,
-        default=3
-    )
-
-    args = parser.parse_args()
-
-    device = (
-        "cuda"
-        if torch.cuda.is_available()
-        else "cpu"
-    )
-
-    print(f"Using Device: {device}")
-
-    # Load Saved Model
-    tokenizer = GPT2Tokenizer.from_pretrained(
-        "saved_model"
-    )
-
-    model = GPT2LMHeadModel.from_pretrained(
-        "saved_model"
-    )
-
-    model.to(device)
-
-    # TRAIN
-    
-    if args.train:
-
-        texts = [
-            "Sayeed Ahmad is a Computer Science Engineer.",
-            "Sayeed Ahmad builds AI and Machine Learning projects.",
-            "Sayeed Ahmad works with Python Data Science and Deep Learning.",
-            "Artificial Intelligence is changing the world.",
-            "Machine Learning helps computers learn from data.",
-            "Deep Learning uses neural networks.",
-            "Generative AI creates text images and code.",
-            "Sayeed Ahmad develops NLP and Generative AI applications.",
-            "Python is one of the most popular programming languages.",
-            "Data Science combines statistics programming and machine learning."
-        ]
-
-        dataset = TextDataset(
-            texts,
-            tokenizer
-        )
-
-        dataloader = DataLoader(
-            dataset,
-            batch_size=2,
-            shuffle=True
-        )
-
-        train_model(
-            model,
-            dataloader,
-            device,
-            args.epochs
-        )
-
-        model.save_pretrained(
-            "saved_model"
-        )
-
-        tokenizer.save_pretrained(
-            "saved_model"
-        )
-
-        print("\nModel Saved Successfully!")
-
-    # PREDICT
-    
-    elif args.predict:
-
-        generate_text(
-            model,
-            tokenizer,
-            args.prompt,
-            device
-        )
-
-    else:
-        print(
-            "Use --train or --predict"
-        )
-
-
-if __name__ == "__main__":
-    main() 
+# -------------------------
+# Footer
+# -------------------------
+st.markdown("---")
+st.markdown(
+    "Developed by **Sayeed Ahmad** | GPT-Neo Language Model"
+)
