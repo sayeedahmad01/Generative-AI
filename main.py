@@ -33,7 +33,7 @@ prompt = st.text_area(
 
 if st.button("Generate"):
 
-    if prompt:
+    if prompt.strip():
 
         output = generator(
             prompt,
